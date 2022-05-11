@@ -1,0 +1,112 @@
+---
+title: "Shopify_DataScience"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+```
+
+## R Markdown
+
+Question 1: Given some sample data, write a program to answer the following: click here to access the required data set
+
+On Shopify, we have exactly 100 sneaker shops, and each of these shops sells only one model of shoe. We want to do some analysis of the average order value (AOV). When we look at orders data over a 30 day window, we naively calculate an AOV of $3145.13. Given that we know these shops are selling sneakers, a relatively affordable item, something seems wrong with our analysis. 
+
+a. Think about what could be going wrong with our calculation. Think about a better way to evaluate this data. 
+
+```{r}
+data = read.csv('2019 Winter Data Science Intern Challenge Data Set - Sheet1.csv', header = TRUE)
+
+data %>% summarise(mean = mean(order_amount))
+
+```
+
+We can see that the AOV of $3145.13 is just a mean of all order_amount values in the table. 
+
+Just by glancing at the table, we can see that there are some shops for which the order_amount is exceptionally high. In order to investigate this, let's calculate the average order amount per shop. We can do that with the following code: 
+```{r}
+AOV_per_shop = 
+  data %>% group_by(shop_id) %>% summarise(mean = mean(order_amount)) %>% arrange(desc(mean))
+head(AOV_per_shop , 10)
+```
+We see that shops 42 and 78 have exceedingly high AOVs, so they can be considered as outliers. A better way to evaluate this data would be to eliminate the two shops and calculate the average order_amount from the rest of the shops. 
+
+What metric would you report for this dataset?
+
+We can filter the data and find the average of the order amount. We can do so by removing the largest and smallest AOVs. By convention, we can eliminate the top 5% and the bottom 5% of the values from the data set to make it as filtered as required. 
+
+ 
+```{r}
+
+quantile_AOV = AOV_per_shop %>% filter(mean < quantile(AOV_per_shop$mean, 0.95)) %>% filter(mean > quantile(AOV_per_shop$mean, 0.05))
+trimmed_mean_ids <- quantile_AOV$shop_id
+
+```
+
+```{r}
+filtered_data <- filter(data, data$shop_id %in% trimmed_mean_ids) %>% arrange(order_amount)
+
+ggplot(filtered_data, aes(x = order_amount)) +
+  geom_density() +
+  geom_vline(aes(xintercept = mean(order_amount)), color = 'red') +
+  ylab("Density") +
+  xlab("Order Amount ")
+```
+
+
+What is its value?
+
+From the filtered data above, we can see that the mean is just slightly higher than 300. 
+```{r}
+(filtered_data %>% summarise(mean = mean(order_amount)))
+```
+We performed the above calculation to find that the actual value is $303.21, which is much lower than the $3145.13 that was calculated before. This price is much more realistic for what the shopkeepers should sell the shoes at.
+
+Question 2: 
+
+For this question you’ll need to use SQL. Follow this link to access the data set required for the challenge. Please use queries to answer the following questions. Paste your queries along with your final numerical answers below.
+
+How many orders were shipped by Speedy Express in total?
+```
+SELECT ShipperName, COUNT (OrderID) as NumOrders
+FROM [Orders]
+LEFT JOIN Shippers
+USING (ShipperID)
+WHERE ShipperName = 'Speedy Express';
+```
+
+We can find Shipper ID in Orders table, but we can't find the name. So we have to join the Orders table with the Shipper's table to be able to query through the name 'Speedy Express'. We now need to count the number of orders that each shipper completed, so we group the shipper names together and count the number of order ids. Now we can filter out the name 'Speedy Express' 
+
+What is the last name of the employee with the most orders?
+
+```
+SELECT LastName, COUNT (OrderID) as NumOrders
+FROM [Orders]
+LEFT JOIN Employees
+USING (EmployeeID)
+GROUP BY LastName
+ORDER BY NumOrders DESC
+LIMIT 1; 
+```
+Last name of the employee with most orders is Peacock with 40 orders. 
+
+What product was ordered the most by customers in Germany?
+
+```
+
+SELECT ProductName, SUM(Quantity) AS NumOrders 
+FROM Products prod, Orders ord, OrderDetails ordDet, customers cust
+WHERE cust.CustomerID = ord.CustomerID AND cust.Country = 'Germany' AND ord.OrderID = ordDet.OrderID AND ordDet.ProductID = prod.ProductID
+GROUP BY ProductName
+ORDER BY NumOrders DESC
+LIMIT 1;
+
+```
+Because we are joining more than 2 tables, it's easier to include the tables in the FROM query, and use WHERE to match the fields. The fields are matched in a way such that CustomerID is matched from the customers and orders; the Country for customers is Germany; OrderID is matched from order and orderDetails; and ProductId is matched from orderDetails and Products. 
+This ensures that we get a list of products ordered by customers in Germany. We can further group the data together and find the product that was ordered the most frequently. 
+
+We find that the Boston Crab Meat is ordered the most by customers in Germany (with quantity 160). 
+
